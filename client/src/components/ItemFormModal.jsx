@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { LoaderCircle, X } from 'lucide-react'
 import { createItem } from '../features/items/services/itemService'
 import useApi from '../hooks/useApi'
+import ReportAccess from './ReportAccess';
 
 const categories = [
   'electronics',
@@ -87,6 +88,7 @@ export default function ItemFormModal({ onClose, onCreated }) {
           </button>
         </div>
 
+        <ReportAccess>
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           <div className="grid grid-cols-2 gap-3">
             {['lost', 'found'].map((type) => (
@@ -204,6 +206,7 @@ export default function ItemFormModal({ onClose, onCreated }) {
             {loading ? 'Submitting...' : 'Submit Report'}
           </button>
         </form>
+      </ReportAccess>
       </div>
     </div>
   )

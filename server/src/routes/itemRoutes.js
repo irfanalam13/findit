@@ -1,13 +1,18 @@
 
+import express from 'express'
 import { Router } from 'express'
 import {
   getItems,
   createItem,
 } from '../controllers/itemController.js'
+import {requireAuth} from '../middleware/requireAuth.js';
 
-const router = Router()
+const router = express.Router();
 
-router.get('/', getItems)
-router.post('/', createItem)
+// Public: browse and search reports.
+router.get('/', getItems);
 
-export default router
+// Private: create a report only with a verified login session.
+router.post('/', requireAuth, createItem);
+
+export default router;

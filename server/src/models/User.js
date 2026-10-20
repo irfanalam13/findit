@@ -11,25 +11,31 @@ const userSchema = new mongoose.Schema(
       trim: true,
       maxlength: 254,
     },
-
     passwordHash: {
       type: String,
       required: true,
       select: false,
     },
-
     isEmailVerified: {
       type: Boolean,
       default: false,
     },
-
-    emailVerificationTokenHash: {
+    emailVerificationOtpHash: {
       type: String,
       default: null,
       select: false,
     },
-
-    emailVerificationExpires: {
+    emailVerificationOtpExpires: {
+      type: Date,
+      default: null,
+      select: false,
+    },
+    emailVerificationOtpAttempts: {
+      type: Number,
+      default: 0,
+      select: false,
+    },
+    emailVerificationOtpSentAt: {
       type: Date,
       default: null,
       select: false,
