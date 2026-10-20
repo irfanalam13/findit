@@ -69,11 +69,32 @@ async function issueVerificationOtp(user) {
   }
 }
 
-export async function register(req, res, next) {
-  try {
-    const email = normalizeEmail(req.body?.email)
-    const password = req.body?.password
 
+export async function register(req, res, next) {
+    console.log('REGISTER DEBUG:', {
+        bodyKeys: Object.keys(req.body ?? {}),
+        receivedName: req.body?.name,
+        receivedEmail: req.body?.email,
+        nameType: typeof req.body?.name,
+    });
+  try {
+    const name =
+      typeof req.body?.name === 'string'
+        ? req.body.name.trim()
+        : '';
+
+    const email = normalizeEmail(req.body?.email);
+    const password = req.body?.password;
+
+    // Validate full name.
+    if (name.length < 2 || name.length > 80) {
+      return res.status(400).json({
+        success: false,
+        message: 'Name must be between 2 and 80 characters.',
+      });
+    }
+
+    // Validate email.
     if (
       !email ||
       email.length > 254 ||
@@ -82,9 +103,10 @@ export async function register(req, res, next) {
       return res.status(400).json({
         success: false,
         message: 'Enter a valid email address.',
-      })
+      });
     }
 
+    // Validate password.
     if (
       typeof password !== 'string' ||
       password.length < MIN_PASSWORD_LENGTH ||
@@ -94,79 +116,88 @@ export async function register(req, res, next) {
         success: false,
         message:
           'Password must contain at least 8 characters and no more than 72 UTF-8 bytes.',
-      })
+      });
     }
 
     let user = await User.findOne({ email }).select(
-      '+emailVerificationOtpHash ' +
-      '+emailVerificationOtpExpires ' +
-      '+emailVerificationOtpAttempts ' +
-      '+emailVerificationOtpSentAt'
-    )
+      '+passwordHash ' +
+        '+emailVerificationOtpHash ' +
+        '+emailVerificationOtpExpires ' +
+        '+emailVerificationOtpAttempts ' +
+        '+emailVerificationOtpSentAt',
+    );
 
+    // Prevent duplicate verified accounts.
     if (user?.isEmailVerified) {
       return res.status(409).json({
         success: false,
         message: 'An account with this email already exists.',
-      })
+      });
     }
 
+    // Enforce OTP resend cooldown.
     if (user?.emailVerificationOtpSentAt) {
       const elapsed =
-        Date.now() -
-        user.emailVerificationOtpSentAt.getTime()
+        Date.now() - user.emailVerificationOtpSentAt.getTime();
 
       if (elapsed < OTP_RESEND_COOLDOWN_MS) {
         return res.status(429).json({
           success: false,
           message:
             'Please wait before requesting another verification code.',
-        })
+        });
       }
     }
 
-    const passwordHash = await bcrypt.hash(password, 12)
+    const passwordHash = await bcrypt.hash(password, 12);
 
     if (!user) {
-      user = await User.create({
+      user = new User({
+        name,
         email,
         passwordHash,
         isEmailVerified: false,
-      })
+      });
     } else {
-      user.passwordHash = passwordHash
+      // Update the existing unverified account.
+      user.name = name;
+      user.passwordHash = passwordHash;
     }
 
+    // Persist the user before sending the OTP.
+    await user.save();
+
     try {
-      await issueVerificationOtp(user)
+      await issueVerificationOtp(user);
     } catch (error) {
       if (error.message === 'VERIFICATION_EMAIL_FAILED') {
         return res.status(503).json({
           success: false,
           message:
             'Unable to send the verification email. Please try again later.',
-        })
+        });
       }
 
-      throw error
+      throw error;
     }
 
     return res.status(201).json({
       success: true,
       message:
         'Account created. Check your email for the verification code.',
-    })
+    });
   } catch (error) {
     if (error.code === 11000) {
       return res.status(409).json({
         success: false,
         message: 'An account with this email already exists.',
-      })
+      });
     }
 
-    next(error)
+    return next(error);
   }
 }
+
 
 export async function verifyEmail(req, res, next) {
   try {

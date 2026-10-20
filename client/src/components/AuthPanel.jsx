@@ -2,10 +2,11 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 
-export default function AuthPanel({ onAuthenticated }) {
+export default function AuthPanel({ onAuthenticated, initialMode = 'login' }) {
+
   const { register, verify, resendOtp, login } = useAuth();
 
-  const [mode, setMode] = useState('login');
+  const [mode, setMode] = useState(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [otp, setOtp] = useState('');

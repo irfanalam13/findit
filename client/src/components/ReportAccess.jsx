@@ -1,15 +1,19 @@
 
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import RegisterForm from './RegisterForm';
 import AuthPanel from './AuthPanel';
 
 export default function ReportAccess({ children }) {
   const { user, loading } = useAuth();
-  const [showAuth, setShowAuth] = useState(false);
+  const [mode, setMode] = useState('login');
+  const [pendingEmail, setPendingEmail] = useState('');
+
+
 
   if (loading) {
     return (
-      <div className="p-6 text-center text-gray-600">
+      <div className="p-6 text-center text-slate-600">
         Checking your session...
       </div>
     );
@@ -20,28 +24,45 @@ export default function ReportAccess({ children }) {
   }
 
   return (
-    <section className="mx-auto max-w-2xl p-4">
-      {!showAuth ? (
-        <div className="rounded-xl border border-gray-200 bg-white p-6 text-center">
-          <h2 className="text-xl font-semibold text-gray-900">
-            Log in to submit a report
-          </h2>
+    <section className="mx-auto w-full max-w-lg">
+      <div className="mb-5 grid grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1">
+        <button
+          type="button"
+          onClick={() => setMode('login')}
+          className={`rounded-lg px-4 py-3 text-sm font-semibold ${
+            mode === 'login'
+              ? 'bg-white text-indigo-700 shadow-sm'
+              : 'text-slate-600'
+          }`}
+        >
+          Log in
+        </button>
 
-          <p className="mt-2 text-gray-600">
-            You can browse reports publicly. To report a lost or found item,
-            log in with your verified email account.
-          </p>
+        <button
+          type="button"
+          onClick={() => setMode('register')}
+          className={`rounded-lg px-4 py-3 text-sm font-semibold ${
+            mode === 'register'
+              ? 'bg-white text-indigo-700 shadow-sm'
+              : 'text-slate-600'
+          }`}
+        >
+          Create account
+        </button>
+      </div>
 
-          <button
-            type="button"
-            onClick={() => setShowAuth(true)}
-            className="mt-4 rounded-lg bg-blue-700 px-5 py-2.5 font-semibold text-white hover:bg-blue-800"
-          >
-            Log in or register
-          </button>
-        </div>
+      {mode === 'register' ? (
+        <RegisterForm
+          onRegistered={({ email }) => {
+            setPendingEmail(email);
+            setMode('verify');
+          }}
+          onLogin={() => setMode('login')}
+        />
+                ) : mode === 'verify' ? (
+        <AuthPanel initialMode="verify" />
       ) : (
-        <AuthPanel onAuthenticated={() => setShowAuth(false)} />
+        <AuthPanel initialMode="login" />
       )}
     </section>
   );
