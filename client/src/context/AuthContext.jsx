@@ -1,6 +1,4 @@
-
 import {
-  createContext,
   useCallback,
   useContext,
   useEffect,
@@ -16,7 +14,7 @@ import {
   verifyEmail,
 } from '../services/authService';
 
-const AuthContext = createContext(null);
+import { AuthContext } from './auth-context';
 
 const extractUser = (response) => {
   return response?.user ?? response?.data?.user ?? null;
@@ -41,9 +39,36 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
+  // Initialize authentication without calling a state-updating
+  // function directly from the effect body.
   useEffect(() => {
-    refreshUser();
-  }, [refreshUser]);
+    let active = true;
+
+    const initializeAuth = async () => {
+      try {
+        const response = await fetchCurrentUser();
+        const currentUser = extractUser(response);
+
+        if (active) {
+          setUser(currentUser);
+        }
+      } catch {
+        if (active) {
+          setUser(null);
+        }
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void initializeAuth();
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const register = async (email, password) => {
     return registerUser(email, password);
@@ -62,10 +87,10 @@ export function AuthProvider({ children }) {
     const loggedInUser = extractUser(response);
 
     if (!loggedInUser) {
-      // Confirm the response shape of your backend if this occurs.
       await refreshUser();
     } else {
       setUser(loggedInUser);
+      setLoading(false);
     }
 
     return response;

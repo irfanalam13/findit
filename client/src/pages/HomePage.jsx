@@ -1,6 +1,6 @@
 
-import { useState } from 'react'
-import {
+import { useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';import {
   AlertCircle,
   LoaderCircle,
   Package,
@@ -43,7 +43,18 @@ export default function HomePage() {
 
   const lostCount = items.filter((item) => item.type === 'lost').length
   const foundCount = items.filter((item) => item.type === 'found').length
+  const location = useLocation();
+  const navigate = useNavigate();
 
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+
+    if (params.get('openReport') === '1') {
+      setNotice('');
+      setModalOpen(true);
+      navigate('/', { replace: true });
+    }
+  }, [location.search, navigate]);
   function handleCreated() {
     setModalOpen(false)
     setNotice('Your item report has been created.')

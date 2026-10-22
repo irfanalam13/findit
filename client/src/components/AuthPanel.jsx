@@ -6,6 +6,7 @@ export default function AuthPanel({
   onAuthenticated,
   initialMode = 'login',
   initialEmail = '',
+  showModeToggle = true,
 }) {
     
   const { register, verify, resendOtp, login } = useAuth();
@@ -154,7 +155,8 @@ export default function AuthPanel({
           />
         </div>
 
-        {mode !== 'verify' && (
+        
+        {showModeToggle && mode !== 'verify' && (
           <div>
             <label
               htmlFor="auth-password"

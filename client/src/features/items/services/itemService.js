@@ -13,9 +13,11 @@ export function getItems({ type, category, search } = {}) {
   return apiRequest(`/items?${params.toString()}`)
 }
 
+
 export function createItem(itemData) {
   return apiRequest('/items', {
     method: 'POST',
+    credentials: 'include',
     body: JSON.stringify(itemData),
-  })
+  });
 }

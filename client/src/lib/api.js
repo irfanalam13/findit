@@ -9,6 +9,7 @@ export async function apiRequest(path, options = {}) {
 
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
+      credentials: options.credentials ?? 'include',
       ...options,
       headers: {
         ...(options.body &&

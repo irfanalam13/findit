@@ -34,10 +34,13 @@ function generateOtp() {
 function safeUser(user) {
   return {
     id: user._id.toString(),
+    name: user.name,
+    username: user.username || '',
+    avatarUrl: user.avatarUrl || '',
     email: user.email,
     isEmailVerified: user.isEmailVerified,
     createdAt: user.createdAt,
-  }
+  };
 }
 
 function clearOtp(user) {

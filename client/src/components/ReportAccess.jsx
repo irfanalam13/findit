@@ -64,6 +64,7 @@ export default function ReportAccess({ children }) {
           key={pendingEmail}
           initialMode="verify"
           initialEmail={pendingEmail}
+          showModeToggle={false}
         />
       ) : (
         <AuthPanel initialMode="login" />
