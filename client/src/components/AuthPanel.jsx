@@ -2,12 +2,18 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 
-export default function AuthPanel({ onAuthenticated, initialMode = 'login' }) {
-
+export default function AuthPanel({
+  onAuthenticated,
+  initialMode = 'login',
+  initialEmail = '',
+}) {
+    
   const { register, verify, resendOtp, login } = useAuth();
 
   const [mode, setMode] = useState(initialMode);
-  const [email, setEmail] = useState('');
+
+  const [email, setEmail] = useState(initialEmail);
+
   const [password, setPassword] = useState('');
   const [otp, setOtp] = useState('');
   const [busy, setBusy] = useState(false);
@@ -48,7 +54,17 @@ export default function AuthPanel({ onAuthenticated, initialMode = 'login' }) {
   const handleVerify = async (event) => {
     event.preventDefault();
 
-    const response = await runAction(() => verify(email, otp));
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanOtp = otp.trim();
+
+    if (!cleanEmail || !/^\d{6}$/.test(cleanOtp)) {
+      setError('Enter a valid email and six-digit code.');
+      return;
+    }
+
+    const response = await runAction(() =>
+    verify(cleanEmail, cleanOtp)
+  );
 
     if (response) {
       setOtp('');

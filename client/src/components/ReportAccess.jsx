@@ -60,7 +60,11 @@ export default function ReportAccess({ children }) {
           onLogin={() => setMode('login')}
         />
                 ) : mode === 'verify' ? (
-        <AuthPanel initialMode="verify" />
+        <AuthPanel
+          key={pendingEmail}
+          initialMode="verify"
+          initialEmail={pendingEmail}
+        />
       ) : (
         <AuthPanel initialMode="login" />
       )}
