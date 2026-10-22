@@ -1,33 +1,65 @@
+import { useCallback, useEffect, useState } from 'react';
 
-import { useCallback, useEffect, useState } from 'react'
-import { getItems } from '../services/itemService'
+import { getItems } from '../services/itemService';
 
 export function useItems({ type, category, search }) {
-  const [items, setItems] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   const refreshItems = useCallback(async () => {
-    setLoading(true)
-    setError('')
+
 
     try {
-      const data = await getItems({ type, category, search })
-      setItems(data.items || [])
+      const data = await getItems({ type, category, search });
+      setItems(data.items || []);
+      return data.items || [];
     } catch (err) {
       setError(
         err.message === 'Failed to fetch'
           ? 'Cannot connect to the server. Check your backend.'
           : err.message
-      )
+      );
+      return [];
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }, [type, category, search])
+  }, [type, category, search]);
 
   useEffect(() => {
-    refreshItems()
-  }, [refreshItems])
+    let active = true;
 
-  return { items, setItems, loading, error, refreshItems }
+    const loadItems = async () => {
+      setLoading(true);
+      setError('');
+
+      try {
+        const data = await getItems({ type, category, search });
+
+        if (active) {
+          setItems(data.items || []);
+        }
+      } catch (err) {
+        if (active) {
+          setError(
+            err.message === 'Failed to fetch'
+              ? 'Cannot connect to the server. Check your backend.'
+              : err.message
+          );
+        }
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void loadItems();
+
+    return () => {
+      active = false;
+    };
+  }, [type, category, search]);
+
+  return { items, setItems, loading, error, refreshItems };
 }

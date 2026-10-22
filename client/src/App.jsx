@@ -12,7 +12,8 @@ import MyReportsPage from './pages/MyReportsPage';
 import AuthPage from './pages/AuthPage';
 
 import ToastProvider from './components/ToastProvider';
-import { AuthProvider, useAuth } from './context/AuthContext';
+import { AuthProvider } from "./context/AuthContext";
+import { useAuth } from "./context/useAuth";
 
 function RequireAuth({ children }) {
   const { user, loading } = useAuth();
