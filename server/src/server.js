@@ -9,7 +9,7 @@ import MongoStore from 'connect-mongo';
 import authRoutes from './routes/authRoutes.js';
 import itemRoutes from './routes/itemRoutes.js';
 import { connectDB } from './config/db.js';
-
+import profileRoutes from './routes/profileRoutes.js';
 dotenv.config();
 
 const app = express();
@@ -78,8 +78,13 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+//Authroutes
 app.use('/api/auth', authRoutes);
+//Itemroutes
 app.use('/api/items', itemRoutes);
+
+//profileroutes
+app.use('/api/profiles', profileRoutes);
 
 app.use((req, res) => {
   res.status(404).json({
