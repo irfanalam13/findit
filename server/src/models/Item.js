@@ -64,7 +64,32 @@ const itemSchema = new mongoose.Schema(
       ref: 'User',
       default: null,
     },
+  
+
+  isHidden: {
+    type: Boolean,
+    default: false,
+    index: true,
   },
+
+  moderationReason: {
+    type: String,
+    trim: true,
+    maxlength: 300,
+    default: '',
+  },
+
+  moderatedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null,
+  },
+
+  moderatedAt: {
+    type: Date,
+    default: null,
+  },
+},
   { timestamps: true }
 )
 

@@ -12,6 +12,7 @@ import MyReportsPage from './pages/MyReportsPage';
 import AuthPage from './pages/AuthPage';
 import ClaimsPage from './pages/ClaimsPage';
 import RewardsPage from './pages/RewardsPage';
+import AdminPage from './pages/AdminPage';
 
 import ToastProvider from './components/ToastProvider';
 import { AuthProvider } from './context/AuthContext';
@@ -42,6 +43,35 @@ function RequireAuth({ children }) {
   return children;
 }
 
+function RequireAdmin({ children }) {
+  const { user, loading } = useAuth();
+  const location = useLocation();
+
+  if (loading) {
+    return (
+      <div className="p-8 text-center text-slate-600">
+        Checking administrator access...
+      </div>
+    );
+  }
+
+  if (!user?.isEmailVerified) {
+    return (
+      <Navigate
+        to="/login"
+        state={{ from: location }}
+        replace
+      />
+    );
+  }
+
+  if (user.role !== 'admin') {
+    return <Navigate to="/" replace />;
+  }
+
+  return children;
+}
+
 function AppRoutes() {
   return (
     <Routes>
@@ -63,6 +93,15 @@ function AppRoutes() {
           <RequireAuth>
             <MyReportsPage />
           </RequireAuth>
+        }
+      />
+
+      <Route
+        path="/admin"
+        element={
+          <RequireAdmin>
+            <AdminPage />
+          </RequireAdmin>
         }
       />
 

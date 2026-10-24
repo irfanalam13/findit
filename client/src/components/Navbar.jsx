@@ -2,6 +2,7 @@
 import { Link, useNavigate } from 'react-router-dom';
 
 import {
+  ShieldCheck,
   Package,
   Plus,
   UserRound,
@@ -85,6 +86,13 @@ export default function Navbar({ onReportClick }) {
                 <Trophy size={16} />
                 Rewards
               </Link>
+
+              {user.role === 'admin' && (
+                <Link to="/admin" className={linkClass}>
+                  <ShieldCheck size={16} />
+                  Admin
+                </Link>
+              )}
 
               <Link to="/profile" className={linkClass}>
                 {user.avatarUrl ? (

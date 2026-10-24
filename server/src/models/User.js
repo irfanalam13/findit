@@ -78,7 +78,38 @@ const userSchema = new mongoose.Schema(
     default: '',
     select: false,
   },
+
+  role: {
+    type: String,
+    enum: ['user', 'admin'],
+    default: 'user',
+    index: true,
   },
+
+  isSuspended: {
+    type: Boolean,
+    default: false,
+    index: true,
+  },
+
+  suspendedAt: {
+    type: Date,
+    default: null,
+  },
+
+  suspendedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null,
+  },
+
+  suspensionReason: {
+    type: String,
+    trim: true,
+    maxlength: 300,
+    default: '',
+  },
+},
   { timestamps: true }
 )
 

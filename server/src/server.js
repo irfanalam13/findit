@@ -14,6 +14,8 @@ import profileRoutes from './routes/profileRoutes.js';
 import claimRoutes from './routes/claimRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
 import rewardRoutes from './routes/rewardRoutes.js';
+import adminRoutes from './routes/adminRoutes.js';
+
 
 dotenv.config();
 
@@ -106,6 +108,9 @@ app.use('/api/claims', claimRoutes);
 app.use('/api/notifications', notificationRoutes);
 //rewardroutes
 app.use('/api/rewards', rewardRoutes);
+
+//adminroutes
+app.use('/api/admin', adminRoutes);
 
 // Catch-all route for undefined endpoints
 app.use((req, res) => {

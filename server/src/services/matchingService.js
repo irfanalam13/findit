@@ -183,7 +183,7 @@ export async function findMatches(itemId, userId) {
 
   const source = await Item.findById(itemId).lean();
 
-  if (!source) {
+  if (source.isHidden) {
     throw httpError(404, 'Report not found.');
   }
 
@@ -230,6 +230,7 @@ export async function findMatches(itemId, userId) {
     type: oppositeType,
     category: source.category,
     status: 'active',
+    isHidden: { $ne: true },
 
     // Exclude the owner and legacy reports without an owner.
     reportedBy: {

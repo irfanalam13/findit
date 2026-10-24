@@ -8,7 +8,10 @@ export async function getItems(req, res, next) {
   try {
     const { type, category, search } = req.query;
 
-    const filter = { status: 'active' };
+    const filter = {
+      status: 'active',
+      isHidden: { $ne: true },
+    };
 
     if (['lost', 'found'].includes(type)) {
       filter.type = type;

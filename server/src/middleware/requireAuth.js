@@ -30,6 +30,15 @@ export async function requireAuth(req, res, next) {
       })
     }
 
+    if (user.isSuspended) {
+      return res.status(403).json({
+        success: false,
+        code: 'ACCOUNT_SUSPENDED',
+        message:
+          'This account has been suspended. Contact Findit support.',
+      });
+    }
+
     req.user = user
 
     return next()

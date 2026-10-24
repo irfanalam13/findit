@@ -41,6 +41,12 @@ export async function createClaim(req, res, next) {
         message: 'A report cannot be claimed against itself.',
       });
     }
+    if (lostItem.isHidden || foundItem.isHidden) {
+      return res.status(404).json({
+        success: false,
+        message: 'One or both reports are unavailable.',
+      });
+    }
 
     const [lostItem, foundItem] = await Promise.all([
       Item.findById(lostItemId).lean(),

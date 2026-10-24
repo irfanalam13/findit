@@ -39,6 +39,7 @@ function safeUser(user) {
     avatarUrl: user.avatarUrl || '',
     email: user.email,
     isEmailVerified: user.isEmailVerified,
+    role: user.role || 'user',
     createdAt: user.createdAt,
   };
 }
@@ -411,6 +412,14 @@ export async function login(req, res, next) {
         code: 'EMAIL_NOT_VERIFIED',
         message: 'Verify your email before logging in.',
       })
+    }
+
+    if (user.isSuspended) {
+      return res.status(403).json({
+        success: false,
+        code: 'ACCOUNT_SUSPENDED',
+        message: 'This account has been suspended.',
+      });
     }
 
     req.session.regenerate((error) => {
