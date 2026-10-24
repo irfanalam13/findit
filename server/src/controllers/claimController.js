@@ -4,6 +4,7 @@ import mongoose from 'mongoose';
 import Item from '../models/Item.js';
 import Claim from '../models/Claim.js';
 import { createNotification } from '../services/notificationService.js';
+import Reward from '../models/Reward.js';
 
 const isValidId = (value) =>
   typeof value === 'string' &&
@@ -460,8 +461,11 @@ export async function reviewClaim(req, res, next) {
 
     try {
       accepted = await Claim.findOneAndUpdate(
-        { _id: claim._id, status: 'pending' },
         {
+          _id: claim._id,
+          status: { $in: ['pending', 'reconsideration_requested'] },
+        },
+              {
           $set: {
             status: 'accepted',
             reviewedAt: new Date(),
@@ -548,3 +552,199 @@ export async function reviewClaim(req, res, next) {
   }
 }
 
+
+export async function confirmReturn(req, res, next) {
+  try {
+    const { id } = req.params;
+
+    if (!isValidId(id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid claim ID.',
+      });
+    }
+
+    const claim = await Claim.findById(id);
+
+    if (!claim) {
+      return res.status(404).json({
+        success: false,
+        message: 'Claim not found.',
+      });
+    }
+
+    const foundItem = await Item.findById(claim.foundItem);
+    const lostItem = await Item.findById(claim.lostItem);
+
+    if (!foundItem || !lostItem) {
+      return res.status(404).json({
+        success: false,
+        message: 'The lost or found report could not be found.',
+      });
+    }
+
+    const userId = String(req.user._id);
+    const claimantId = String(claim.claimant);
+    const finderId = String(foundItem.reportedBy);
+
+    const isClaimant = userId === claimantId;
+    const isFinder = userId === finderId;
+
+    if (!isClaimant && !isFinder) {
+      return res.status(403).json({
+        success: false,
+        message: 'Only the claimant and the finder can confirm the return.',
+      });
+    }
+
+    if (claim.status === 'completed') {
+      return res.json({
+        success: true,
+        completed: true,
+        claim,
+        message: 'The handover has already been completed.',
+      });
+    }
+
+    if (claim.status !== 'accepted') {
+      return res.status(409).json({
+        success: false,
+        message: 'Only an accepted claim can have its handover confirmed.',
+      });
+    }
+
+    if (
+      lostItem.status !== 'claimed' ||
+      foundItem.status !== 'claimed'
+    ) {
+      return res.status(409).json({
+        success: false,
+        message: 'Both reports must still be reserved for this claim.',
+      });
+    }
+
+    // Each participant can confirm only their own side.
+    const confirmationField = isClaimant
+      ? 'claimantConfirmedReturnAt'
+      : 'finderConfirmedReturnAt';
+
+    const confirmationUpdate = await Claim.findOneAndUpdate(
+      {
+        _id: claim._id,
+        status: 'accepted',
+        [confirmationField]: null,
+      },
+      {
+        $set: {
+          [confirmationField]: new Date(),
+        },
+      },
+      {
+        new: true,
+        runValidators: true,
+      },
+    );
+
+    // A null result means this participant already confirmed,
+    // or the claim changed while this request was being processed.
+    const latestClaim =
+      confirmationUpdate || (await Claim.findById(claim._id));
+
+    if (!latestClaim) {
+      return res.status(404).json({
+        success: false,
+        message: 'Claim not found.',
+      });
+    }
+
+    const bothConfirmed =
+      Boolean(latestClaim.claimantConfirmedReturnAt) &&
+      Boolean(latestClaim.finderConfirmedReturnAt);
+
+    if (!bothConfirmed) {
+      return res.json({
+        success: true,
+        completed: false,
+        claim: latestClaim,
+        message: isClaimant
+          ? 'Your confirmation is saved. The finder must also confirm the handover.'
+          : 'Your confirmation is saved. The claimant must also confirm receiving the item.',
+      });
+    }
+
+    // Only one request can change the accepted claim to completed.
+    const completedClaim = await Claim.findOneAndUpdate(
+      {
+        _id: latestClaim._id,
+        status: 'accepted',
+        claimantConfirmedReturnAt: { $ne: null },
+        finderConfirmedReturnAt: { $ne: null },
+      },
+      {
+        $set: { status: 'completed' },
+      },
+      {
+        new: true,
+        runValidators: true,
+      },
+    );
+
+    if (!completedClaim) {
+      const currentClaim = await Claim.findById(latestClaim._id);
+
+      if (currentClaim?.status === 'completed') {
+        return res.json({
+          success: true,
+          completed: true,
+          claim: currentClaim,
+          message: 'The handover has already been completed.',
+        });
+      }
+
+      return res.status(409).json({
+        success: false,
+        message: 'The claim changed while completing the handover. Refresh and try again.',
+      });
+    }
+
+    // Resolve both reports only after both participants confirmed.
+    await Promise.all([
+      Item.updateOne(
+        { _id: completedClaim.lostItem, status: 'claimed' },
+        { $set: { status: 'resolved' } },
+      ),
+      Item.updateOne(
+        { _id: completedClaim.foundItem, status: 'claimed' },
+        { $set: { status: 'resolved' } },
+      ),
+    ]);
+
+    // Reward the finder for returning the item.
+    // The unique eventKey prevents duplicate rewards for this claim.
+    try {
+      await Reward.create({
+        user: foundItem.reportedBy,
+        item: foundItem._id,
+        eventKey: `confirmed_return:${completedClaim._id}`,
+        points: 10,
+        reason: 'confirmed_return',
+      });
+    } catch (error) {
+      if (error.code !== 11000) {
+        throw error;
+      }
+
+      // A reward with this eventKey already exists, so do not
+      // award it again.
+    }
+
+    return res.json({
+      success: true,
+      completed: true,
+      claim: completedClaim,
+      message: 'Both users confirmed the handover. Reports resolved and finder awarded 10 points.',
+    });
+  } catch (error) {
+    return next(error);
+  }
+}

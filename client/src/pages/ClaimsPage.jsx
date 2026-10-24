@@ -14,6 +14,7 @@ import {
   getReceivedClaims,
   reviewClaim,
   requestClaimReconsideration,
+  confirmClaimReturn,
 } from '../features/items/services/itemService';
 
 function formatDate(value) {
@@ -27,10 +28,13 @@ function ClaimCard({
   reviewingId,
   onReconsider,
   reconsideringId,
+  onConfirmReturn,
+  confirmingId,
 }) {
   const busy =
     reviewingId === claim._id ||
-    reconsideringId === claim._id;
+    reconsideringId === claim._id ||
+    confirmingId === claim._id;
 
   const lostItem = claim.lostItem;
   const foundItem = claim.foundItem;
@@ -85,11 +89,12 @@ function ClaimCard({
           : ''}
       </p>
 
+      {/* Finder reviews a new claim or a reconsideration request. */}
       {received && canReview && (
         <div className="mt-5 flex flex-wrap gap-3">
           <button
             type="button"
-            disabled={busy || Boolean(reviewingId) || Boolean(reconsideringId)}
+            disabled={busy}
             onClick={() => onReview(claim._id, 'accepted')}
             className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
@@ -102,7 +107,7 @@ function ClaimCard({
 
           <button
             type="button"
-            disabled={busy || Boolean(reviewingId) || Boolean(reconsideringId)}
+            disabled={busy}
             onClick={() => onReview(claim._id, 'rejected')}
             className="rounded-lg border border-red-200 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
           >
@@ -111,6 +116,7 @@ function ClaimCard({
         </div>
       )}
 
+      {/* Claimant may ask the finder to reconsider a rejection. */}
       {!received && claim.status === 'rejected' && (
         <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4">
           <p className="text-sm font-semibold text-amber-900">
@@ -118,17 +124,13 @@ function ClaimCard({
           </p>
 
           <p className="mt-1 text-sm text-amber-800">
-            If you believe the claim was rejected by mistake, you can ask
-            the finder to review it again.
+            If you believe this was a mistake, you can ask the finder to
+            review your claim again.
           </p>
 
           <button
             type="button"
-            disabled={
-              busy ||
-              Boolean(reviewingId) ||
-              Boolean(reconsideringId)
-            }
+            disabled={busy}
             onClick={() => onReconsider(claim._id)}
             className="mt-3 rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
@@ -146,16 +148,73 @@ function ClaimCard({
         </p>
       )}
 
+      {/* Both participants must confirm the handover. */}
       {claim.status === 'accepted' && (
-        <p className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
-          Claim accepted. The physical handover still needs to be confirmed.
-        </p>
+        <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <p className="font-semibold text-amber-900">
+            Confirm item handover
+          </p>
+
+          <p className="mt-1 text-sm text-amber-800">
+            Both users must confirm before the reports are resolved and
+            reward points are awarded.
+          </p>
+
+          <div className="mt-3 space-y-2 text-sm text-amber-950">
+            <p>
+              <span className="font-medium">Claimant:</span>{' '}
+              {claim.claimantConfirmedReturnAt
+                ? `Confirmed ${formatDate(
+                    claim.claimantConfirmedReturnAt,
+                  )}`
+                : 'Waiting for confirmation'}
+            </p>
+
+            <p>
+              <span className="font-medium">Finder:</span>{' '}
+              {claim.finderConfirmedReturnAt
+                ? `Confirmed ${formatDate(
+                    claim.finderConfirmedReturnAt,
+                  )}`
+                : 'Waiting for confirmation'}
+            </p>
+          </div>
+
+          {(
+            (received && !claim.finderConfirmedReturnAt) ||
+            (!received && !claim.claimantConfirmedReturnAt)
+          ) && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onConfirmReturn(claim._id)}
+              className="mt-4 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {confirmingId === claim._id
+                ? 'Confirming...'
+                : received
+                  ? 'Confirm I handed over the item'
+                  : 'Confirm I received the item'}
+            </button>
+          )}
+
+          {claim.claimantConfirmedReturnAt &&
+            claim.finderConfirmedReturnAt && (
+              <p className="mt-3 text-sm font-semibold text-emerald-700">
+                Both confirmations received. Finalizing handover...
+              </p>
+            )}
+        </div>
       )}
 
       {claim.status === 'completed' && (
-        <p className="mt-4 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">
-          Item handover completed.
-        </p>
+        <div className="mt-4 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-800">
+          <p className="font-semibold">Item handover completed</p>
+          <p className="mt-1">
+            Both users confirmed the return. The finder should receive
+            the configured reward points.
+          </p>
+        </div>
       )}
     </article>
   );
@@ -167,9 +226,9 @@ export default function ClaimsPage() {
   const [loading, setLoading] = useState(true);
   const [reviewingId, setReviewingId] = useState('');
   const [reconsideringId, setReconsideringId] = useState('');
+  const [confirmingId, setConfirmingId] = useState('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
-
 
   const loadClaims = useCallback(async (silent = false) => {
     if (!silent) {
@@ -182,10 +241,9 @@ export default function ClaimsPage() {
         getReceivedClaims(),
       ]);
 
-      // Clear errors only after the requests complete successfully.
-      setError('');
       setMyClaims(mine.claims || []);
       setReceivedClaims(received.claims || []);
+      setError('');
     } catch (err) {
       setError(
         err.data?.message ||
@@ -193,12 +251,20 @@ export default function ClaimsPage() {
           'Could not load claims. Try refreshing.',
       );
     } finally {
-      // Also finish the initial load when silent=true.
       setLoading(false);
     }
   }, []);
 
+  // Initial load and automatic refresh every 15 seconds.
+  // useEffect(() => {
+  //   void loadClaims();
 
+  //   const intervalId = window.setInterval(() => {
+  //     void loadClaims(true);
+  //   }, 15000);
+
+  //   return () => window.clearInterval(intervalId);
+  // }, [loadClaims]);
   useEffect(() => {
     let active = true;
 
@@ -294,6 +360,30 @@ export default function ClaimsPage() {
     }
   }
 
+  async function handleConfirmReturn(claimId) {
+    setConfirmingId(claimId);
+    setError('');
+    setNotice('');
+
+    try {
+      const result = await confirmClaimReturn(claimId);
+
+      setNotice(
+        result.message || 'Your handover confirmation has been saved.',
+      );
+
+      await loadClaims(true);
+    } catch (err) {
+      setError(
+        err.data?.message ||
+          err.message ||
+          'Could not confirm the handover.',
+      );
+    } finally {
+      setConfirmingId('');
+    }
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <Navbar />
@@ -316,8 +406,7 @@ export default function ClaimsPage() {
             <h1 className="mt-1 text-3xl font-bold">Claims</h1>
 
             <p className="mt-2 text-sm text-slate-600">
-              Track your submitted claims and review requests for items
-              you reported as found.
+              Manage your claims, review requests, and confirm item returns.
             </p>
           </div>
 
@@ -379,6 +468,8 @@ export default function ClaimsPage() {
                       onReview={handleReview}
                       onReconsider={handleReconsideration}
                       reconsideringId={reconsideringId}
+                      onConfirmReturn={handleConfirmReturn}
+                      confirmingId={confirmingId}
                     />
                   ))}
                 </div>
@@ -391,7 +482,7 @@ export default function ClaimsPage() {
               {receivedClaims.length === 0 ? (
                 <p className="mt-4 rounded-xl border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-600">
                   No one has claimed an item from your found reports yet.
-                  New claims will appear here while this page is open.
+                  New claims appear here while this page is open.
                 </p>
               ) : (
                 <div className="mt-4 grid gap-4">
@@ -404,6 +495,8 @@ export default function ClaimsPage() {
                       onReview={handleReview}
                       onReconsider={handleReconsideration}
                       reconsideringId={reconsideringId}
+                      onConfirmReturn={handleConfirmReturn}
+                      confirmingId={confirmingId}
                     />
                   ))}
                 </div>

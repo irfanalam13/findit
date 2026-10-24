@@ -8,6 +8,7 @@ import {
   getReceivedClaims,
   requestReconsideration,
   reviewClaim,
+  confirmReturn,
 } from '../controllers/claimController.js';
 
 const router = Router();
@@ -20,5 +21,7 @@ router.get('/received', getReceivedClaims);
 
 router.post('/:id/reconsider', requestReconsideration);
 router.patch('/:id/review', reviewClaim);
+
+router.post('/:id/confirm-return', confirmReturn);
 
 export default router;

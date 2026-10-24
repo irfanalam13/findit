@@ -84,3 +84,14 @@ export function requestClaimReconsideration(claimId) {
     },
   );
 }
+
+
+export function confirmClaimReturn(claimId) {
+  return apiRequest(
+    `/claims/${encodeURIComponent(claimId)}/confirm-return`,
+    {
+      method: 'POST',
+      credentials: 'include',
+    },
+  );
+}
