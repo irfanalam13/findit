@@ -149,7 +149,10 @@ export default function MyReportsPage() {
                     </div>
                   </dl>
                   {item.status === 'active' && (
-                    <ItemMatchesPanel itemId={item._id} />
+                    <ItemMatchesPanel
+                      itemId={item._id}
+                      itemType={item.type}
+                    />
                   )}
                 </div>
               </article>

@@ -36,3 +36,39 @@ export function getItemMatches(itemId) {
     },
   );
 }
+
+
+export function submitClaim({ lostItemId, foundItemId, message }) {
+  return apiRequest('/claims', {
+    method: 'POST',
+    credentials: 'include',
+    body: JSON.stringify({
+      lostItemId,
+      foundItemId,
+      message,
+    }),
+  });
+}
+
+export function getMyClaims() {
+  return apiRequest('/claims/mine', {
+    credentials: 'include',
+  });
+}
+
+export function getReceivedClaims() {
+  return apiRequest('/claims/received', {
+    credentials: 'include',
+  });
+}
+
+export function reviewClaim(claimId, decision) {
+  return apiRequest(
+    `/claims/${encodeURIComponent(claimId)}/review`,
+    {
+      method: 'PATCH',
+      credentials: 'include',
+      body: JSON.stringify({ decision }),
+    },
+  );
+}

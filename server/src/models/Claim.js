@@ -23,7 +23,13 @@ const claimSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['pending', 'accepted', 'rejected', 'completed', 'cancelled'],
+      enum: [
+        'pending',
+        'accepted',
+        'rejected',
+        'completed',
+        'cancelled',
+      ],
       default: 'pending',
       index: true,
     },
@@ -41,9 +47,28 @@ const claimSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
+// A user can only submit one claim for the same report pair.
 claimSchema.index(
   { lostItem: 1, foundItem: 1, claimant: 1 },
   { unique: true },
+);
+
+// A lost report can have at most one accepted claim.
+claimSchema.index(
+  { lostItem: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { status: 'accepted' },
+  },
+);
+
+// A found report can have at most one accepted claim.
+claimSchema.index(
+  { foundItem: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { status: 'accepted' },
+  },
 );
 
 export default mongoose.model('Claim', claimSchema);
