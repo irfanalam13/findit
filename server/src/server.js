@@ -10,6 +10,8 @@ import authRoutes from './routes/authRoutes.js';
 import itemRoutes from './routes/itemRoutes.js';
 import { connectDB } from './config/db.js';
 import profileRoutes from './routes/profileRoutes.js';
+import claimRoutes from './routes/claimRoutes.js';
+
 dotenv.config();
 
 const app = express();
@@ -85,6 +87,9 @@ app.use('/api/items', itemRoutes);
 
 //profileroutes
 app.use('/api/profiles', profileRoutes);
+
+//claimroutes
+app.use('/api/claims', claimRoutes);
 
 app.use((req, res) => {
   res.status(404).json({

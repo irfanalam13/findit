@@ -21,3 +21,18 @@ export function createItem(itemData) {
     body: JSON.stringify(itemData),
   });
 }
+
+
+export function getItemMatches(itemId) {
+  if (!itemId) {
+    throw new Error('An item ID is required.');
+  }
+
+  return apiRequest(
+    `/items/${encodeURIComponent(itemId)}/matches`,
+    {
+      method: 'GET',
+      credentials: 'include',
+    },
+  );
+}

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ClipboardList, LoaderCircle, Package } from 'lucide-react';
-
+import ItemMatchesPanel from '../components/ItemMatchesPanel';
 import Navbar from '../components/Navbar';
 import { getMyReports } from '../features/profile/profileService';
 
@@ -148,6 +148,9 @@ export default function MyReportsPage() {
                       </dd>
                     </div>
                   </dl>
+                  {item.status === 'active' && (
+                    <ItemMatchesPanel itemId={item._id} />
+                  )}
                 </div>
               </article>
             ))}
