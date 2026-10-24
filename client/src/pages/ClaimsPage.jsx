@@ -170,12 +170,11 @@ export default function ClaimsPage() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
+
   const loadClaims = useCallback(async (silent = false) => {
     if (!silent) {
       setLoading(true);
     }
-
-    setError('');
 
     try {
       const [mine, received] = await Promise.all([
@@ -183,6 +182,8 @@ export default function ClaimsPage() {
         getReceivedClaims(),
       ]);
 
+      // Clear errors only after the requests complete successfully.
+      setError('');
       setMyClaims(mine.claims || []);
       setReceivedClaims(received.claims || []);
     } catch (err) {
@@ -192,22 +193,55 @@ export default function ClaimsPage() {
           'Could not load claims. Try refreshing.',
       );
     } finally {
-      if (!silent) {
-        setLoading(false);
-      }
+      // Also finish the initial load when silent=true.
+      setLoading(false);
     }
   }, []);
 
-  useEffect(() => {
-    void loadClaims();
 
-    // Refresh the inbox every 15 seconds while this page is open.
+  useEffect(() => {
+    let active = true;
+
+    const fetchClaims = async () => {
+      try {
+        const [mine, received] = await Promise.all([
+          getMyClaims(),
+          getReceivedClaims(),
+        ]);
+
+        if (!active) return;
+
+        setError('');
+        setMyClaims(mine.claims || []);
+        setReceivedClaims(received.claims || []);
+      } catch (err) {
+        if (active) {
+          setError(
+            err.data?.message ||
+              err.message ||
+              'Could not load claims. Try refreshing.'
+          );
+        }
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    };
+
+    // Load claims when the page opens.
+    void fetchClaims();
+
+    // Refresh the claims inbox every 15 seconds.
     const intervalId = window.setInterval(() => {
-      void loadClaims(true);
+      void fetchClaims();
     }, 15000);
 
-    return () => window.clearInterval(intervalId);
-  }, [loadClaims]);
+    return () => {
+      active = false;
+      window.clearInterval(intervalId);
+    };
+    }, []);
 
   async function handleReview(claimId, decision) {
     setReviewingId(claimId);
