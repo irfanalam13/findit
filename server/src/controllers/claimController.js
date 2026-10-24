@@ -212,6 +212,88 @@ export async function getReceivedClaims(req, res, next) {
 }
 
 
+export async function requestReconsideration(req, res, next) {
+  try {
+    const { id } = req.params;
+
+    if (!isValidId(id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid claim ID.',
+      });
+    }
+
+    const claim = await Claim.findById(id);
+
+    if (!claim) {
+      return res.status(404).json({
+        success: false,
+        message: 'Claim not found.',
+      });
+    }
+
+    // Only the person who originally claimed the item can request review.
+    if (String(claim.claimant) !== String(req.user._id)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Only the original claimant can request reconsideration.',
+      });
+    }
+
+    if (claim.status !== 'rejected') {
+      return res.status(409).json({
+        success: false,
+        message: 'Only a rejected claim can be reconsidered.',
+      });
+    }
+
+    // Reports must still be available before asking the finder to review again.
+    const [lostItem, foundItem] = await Promise.all([
+      Item.findById(claim.lostItem).lean(),
+      Item.findById(claim.foundItem).lean(),
+    ]);
+
+    if (
+      !lostItem ||
+      !foundItem ||
+      lostItem.status !== 'active' ||
+      foundItem.status !== 'active'
+    ) {
+      return res.status(409).json({
+        success: false,
+        message: 'One or both reports are no longer available for reconsideration.',
+      });
+    }
+
+    const updatedClaim = await Claim.findOneAndUpdate(
+      { _id: claim._id, status: 'rejected' },
+      {
+        $set: {
+          status: 'reconsideration_requested',
+          reconsiderationRequestedAt: new Date(),
+        },
+      },
+      { new: true, runValidators: true },
+    );
+
+    if (!updatedClaim) {
+      return res.status(409).json({
+        success: false,
+        message: 'This claim has already changed. Refresh and try again.',
+      });
+    }
+
+    return res.json({
+      success: true,
+      claim: updatedClaim,
+      message: 'Reconsideration requested. The finder can now review your claim again.',
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+
 export async function reviewClaim(req, res, next) {
   let reservedLostItemId = null;
   let reservedFoundItemId = null;
@@ -259,7 +341,9 @@ export async function reviewClaim(req, res, next) {
       });
     }
 
-    if (claim.status !== 'pending') {
+    if (
+      !['pending', 'reconsideration_requested'].includes(claim.status)
+    ) {
       return res.status(409).json({
         success: false,
         message: 'This claim has already been reviewed.',

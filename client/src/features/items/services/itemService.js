@@ -72,3 +72,15 @@ export function reviewClaim(claimId, decision) {
     },
   );
 }
+
+
+
+export function requestClaimReconsideration(claimId) {
+  return apiRequest(
+    `/claims/${encodeURIComponent(claimId)}/reconsider`,
+    {
+      method: 'POST',
+      credentials: 'include',
+    },
+  );
+}
