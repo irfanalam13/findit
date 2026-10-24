@@ -493,16 +493,6 @@ export async function reviewClaim(req, res, next) {
         ),
       ]);
 
-      await createNotification({
-        recipient: claim.claimant,
-        actor: req.user._id,
-        type: 'claim_accepted',
-        title: 'Claim accepted',
-        message: 'The finder accepted your claim. Arrange the item handover.',
-        link: '/claims',
-        relatedClaim: accepted._id,
-      });
-
       reservedLostItemId = null;
       reservedFoundItemId = null;
 
@@ -513,6 +503,22 @@ export async function reviewClaim(req, res, next) {
         message:
           'The claim was already reviewed or another claim was accepted.',
       });
+    }
+
+    // Notify the claimant after the claim has actually been accepted.
+    try {
+      await createNotification({
+        recipient: accepted.claimant,
+        actor: req.user._id,
+        type: 'claim_accepted',
+        title: 'Claim accepted',
+        message: 'The finder accepted your claim. Arrange the item handover.',
+        link: '/claims',
+        relatedClaim: accepted._id,
+      });
+    } catch (notificationError) {
+      // Notification failure should not undo a successful claim acceptance.
+      console.error('Claim accepted notification failed:', notificationError);
     }
 
     return res.json({
@@ -553,225 +559,211 @@ export async function reviewClaim(req, res, next) {
 }
 
 
+
+async function ensureConfirmedReturnReward(completedClaim, foundItem) {
+  if (
+    !completedClaim?.claimantConfirmedReturnAt ||
+    !completedClaim?.finderConfirmedReturnAt ||
+    !foundItem?.reportedBy
+  ) {
+    return;
+  }
+
+  try {
+    await Reward.create({
+      user: foundItem.reportedBy,
+      item: foundItem._id,
+      eventKey: `confirmed_return:${completedClaim._id}`,
+      points: 10,
+      reason: 'confirmed_return',
+    });
+  } catch (error) {
+    // The unique eventKey makes retries safe: a duplicate is already awarded.
+    if (error.code !== 11000) {
+      throw error;
+    }
+  }
+}
+
 export async function confirmReturn(req, res, next) {
-  await ensureConfirmedReturnReward(completedClaim, foundItem);
-  // try {
-  //   const { id } = req.params;
+  try {
+    const { id } = req.params;
 
-  //   if (!isValidId(id)) {
-  //     return res.status(400).json({
-  //       success: false,
-  //       message: 'Invalid claim ID.',
-  //     });
-  //   }
+    if (!isValidId(id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid claim ID.',
+      });
+    }
 
-  //   async function ensureConfirmedReturnReward(completedClaim, foundItem) {
-  //     if (
-  //       !completedClaim.claimantConfirmedReturnAt ||
-  //       !completedClaim.finderConfirmedReturnAt
-  //     ) {
-  //       return;
-  //     }
+    const claim = await Claim.findById(id);
 
-  //     try {
-  //       await Reward.create({
-  //         user: foundItem.reportedBy,
-  //         item: foundItem._id,
-  //         eventKey: `confirmed_return:${completedClaim._id}`,
-  //         points: 10,
-  //         reason: 'confirmed_return',
-  //       });
-  //     } catch (error) {
-  //       // A reward for this claim already exists.
-  //       if (error.code !== 11000) {
-  //         throw error;
-  //       }
-  //     }
-  //   }
+    if (!claim) {
+      return res.status(404).json({
+        success: false,
+        message: 'Claim not found.',
+      });
+    }
 
-  //   const claim = await Claim.findById(id);
+    const [foundItem, lostItem] = await Promise.all([
+      Item.findById(claim.foundItem),
+      Item.findById(claim.lostItem),
+    ]);
 
-  //   if (!claim) {
-  //     return res.status(404).json({
-  //       success: false,
-  //       message: 'Claim not found.',
-  //     });
-  //   }
+    if (!foundItem || !lostItem) {
+      return res.status(404).json({
+        success: false,
+        message: 'The lost or found report could not be found.',
+      });
+    }
 
-  //   const foundItem = await Item.findById(claim.foundItem);
-  //   const lostItem = await Item.findById(claim.lostItem);
+    const userId = String(req.user._id);
+    const claimantId = String(claim.claimant);
+    const finderId = String(foundItem.reportedBy);
 
-  //   if (!foundItem || !lostItem) {
-  //     return res.status(404).json({
-  //       success: false,
-  //       message: 'The lost or found report could not be found.',
-  //     });
-  //   }
+    const isClaimant = userId === claimantId;
+    const isFinder = userId === finderId;
 
-  //   const userId = String(req.user._id);
-  //   const claimantId = String(claim.claimant);
-  //   const finderId = String(foundItem.reportedBy);
+    if (!isClaimant && !isFinder) {
+      return res.status(403).json({
+        success: false,
+        message: 'Only the claimant and the finder can confirm the return.',
+      });
+    }
 
-  //   const isClaimant = userId === claimantId;
-  //   const isFinder = userId === finderId;
+    if (claim.status === 'completed') {
+      await ensureConfirmedReturnReward(claim, foundItem);
 
-  //   if (!isClaimant && !isFinder) {
-  //     return res.status(403).json({
-  //       success: false,
-  //       message: 'Only the claimant and the finder can confirm the return.',
-  //     });
-  //   }
+      return res.json({
+        success: true,
+        completed: true,
+        claim,
+        message: 'The handover has already been completed.',
+      });
+    }
 
-  //   if (claim.status === 'completed') {
-  //     await ensureConfirmedReturnReward(claim, foundItem);
+    if (claim.status !== 'accepted') {
+      return res.status(409).json({
+        success: false,
+        message: 'Only an accepted claim can have its handover confirmed.',
+      });
+    }
 
-  //     return res.json({
-  //       success: true,
-  //       completed: true,
-  //       claim,
-  //       message: 'The handover has already been completed.',
-  //     });
-  //   }
+    if (lostItem.status !== 'claimed' || foundItem.status !== 'claimed') {
+      return res.status(409).json({
+        success: false,
+        message: 'Both reports must still be reserved for this claim.',
+      });
+    }
 
-  //   if (claim.status !== 'accepted') {
-  //     return res.status(409).json({
-  //       success: false,
-  //       message: 'Only an accepted claim can have its handover confirmed.',
-  //     });
-  //   }
+    // Each participant can confirm only their own side.
+    const confirmationField = isClaimant
+      ? 'claimantConfirmedReturnAt'
+      : 'finderConfirmedReturnAt';
 
-  //   if (
-  //     lostItem.status !== 'claimed' ||
-  //     foundItem.status !== 'claimed'
-  //   ) {
-  //     return res.status(409).json({
-  //       success: false,
-  //       message: 'Both reports must still be reserved for this claim.',
-  //     });
-  //   }
+    const confirmationUpdate = await Claim.findOneAndUpdate(
+      {
+        _id: claim._id,
+        status: 'accepted',
+        [confirmationField]: null,
+      },
+      {
+        $set: {
+          [confirmationField]: new Date(),
+        },
+      },
+      {
+        new: true,
+        runValidators: true,
+      },
+    );
 
-  //   // Each participant can confirm only their own side.
-  //   const confirmationField = isClaimant
-  //     ? 'claimantConfirmedReturnAt'
-  //     : 'finderConfirmedReturnAt';
+    // If this participant already confirmed, read the latest persisted claim.
+    const latestClaim =
+      confirmationUpdate || (await Claim.findById(claim._id));
 
-  //   const confirmationUpdate = await Claim.findOneAndUpdate(
-  //     {
-  //       _id: claim._id,
-  //       status: 'accepted',
-  //       [confirmationField]: null,
-  //     },
-  //     {
-  //       $set: {
-  //         [confirmationField]: new Date(),
-  //       },
-  //     },
-  //     {
-  //       new: true,
-  //       runValidators: true,
-  //     },
-  //   );
+    if (!latestClaim) {
+      return res.status(404).json({
+        success: false,
+        message: 'Claim not found.',
+      });
+    }
 
-  //   // A null result means this participant already confirmed,
-  //   // or the claim changed while this request was being processed.
-  //   const latestClaim =
-  //     confirmationUpdate || (await Claim.findById(claim._id));
+    const bothConfirmed =
+      Boolean(latestClaim.claimantConfirmedReturnAt) &&
+      Boolean(latestClaim.finderConfirmedReturnAt);
 
-  //   if (!latestClaim) {
-  //     return res.status(404).json({
-  //       success: false,
-  //       message: 'Claim not found.',
-  //     });
-  //   }
+    if (!bothConfirmed) {
+      return res.json({
+        success: true,
+        completed: false,
+        claim: latestClaim,
+        message: isClaimant
+          ? 'Your confirmation is saved. The finder must also confirm the handover.'
+          : 'Your confirmation is saved. The claimant must also confirm receiving the item.',
+      });
+    }
 
-  //   const bothConfirmed =
-  //     Boolean(latestClaim.claimantConfirmedReturnAt) &&
-  //     Boolean(latestClaim.finderConfirmedReturnAt);
+    // Only one concurrent request can transition this claim to completed.
+    const completedClaim = await Claim.findOneAndUpdate(
+      {
+        _id: latestClaim._id,
+        status: 'accepted',
+        claimantConfirmedReturnAt: { $ne: null },
+        finderConfirmedReturnAt: { $ne: null },
+      },
+      {
+        $set: { status: 'completed' },
+      },
+      {
+        new: true,
+        runValidators: true,
+      },
+    );
 
-  //   if (!bothConfirmed) {
-  //     return res.json({
-  //       success: true,
-  //       completed: false,
-  //       claim: latestClaim,
-  //       message: isClaimant
-  //         ? 'Your confirmation is saved. The finder must also confirm the handover.'
-  //         : 'Your confirmation is saved. The claimant must also confirm receiving the item.',
-  //     });
-  //   }
+    if (!completedClaim) {
+      const currentClaim = await Claim.findById(latestClaim._id);
 
-  //   // Only one request can change the accepted claim to completed.
-  //   const completedClaim = await Claim.findOneAndUpdate(
-  //     {
-  //       _id: latestClaim._id,
-  //       status: 'accepted',
-  //       claimantConfirmedReturnAt: { $ne: null },
-  //       finderConfirmedReturnAt: { $ne: null },
-  //     },
-  //     {
-  //       $set: { status: 'completed' },
-  //     },
-  //     {
-  //       new: true,
-  //       runValidators: true,
-  //     },
-  //   );
+      if (currentClaim?.status === 'completed') {
+        await ensureConfirmedReturnReward(currentClaim, foundItem);
 
-  //   if (!completedClaim) {
-  //     const currentClaim = await Claim.findById(latestClaim._id);
+        return res.json({
+          success: true,
+          completed: true,
+          claim: currentClaim,
+          message: 'The handover has already been completed.',
+        });
+      }
 
-  //     if (currentClaim?.status === 'completed') {
-  //       return res.json({
-  //         success: true,
-  //         completed: true,
-  //         claim: currentClaim,
-  //         message: 'The handover has already been completed.',
-  //       });
-  //     }
+      return res.status(409).json({
+        success: false,
+        message: 'The claim changed while completing the handover. Refresh and try again.',
+      });
+    }
 
-  //     return res.status(409).json({
-  //       success: false,
-  //       message: 'The claim changed while completing the handover. Refresh and try again.',
-  //     });
-  //   }
+    // Resolve both reports only after both participants confirmed.
+    await Promise.all([
+      Item.updateOne(
+        { _id: completedClaim.lostItem, status: 'claimed' },
+        { $set: { status: 'resolved' } },
+      ),
+      Item.updateOne(
+        { _id: completedClaim.foundItem, status: 'claimed' },
+        { $set: { status: 'resolved' } },
+      ),
+    ]);
 
-  //   // Resolve both reports only after both participants confirmed.
-  //   await Promise.all([
-  //     Item.updateOne(
-  //       { _id: completedClaim.lostItem, status: 'claimed' },
-  //       { $set: { status: 'resolved' } },
-  //     ),
-  //     Item.updateOne(
-  //       { _id: completedClaim.foundItem, status: 'claimed' },
-  //       { $set: { status: 'resolved' } },
-  //     ),
-  //   ]);
+    // The unique eventKey prevents duplicate points for this completed claim.
+    await ensureConfirmedReturnReward(completedClaim, foundItem);
 
-  //   // Reward the finder for returning the item.
-  //   // The unique eventKey prevents duplicate rewards for this claim.
-  //   try {
-  //     await Reward.create({
-  //       user: foundItem.reportedBy,
-  //       item: foundItem._id,
-  //       eventKey: `confirmed_return:${completedClaim._id}`,
-  //       points: 10,
-  //       reason: 'confirmed_return',
-  //     });
-  //   } catch (error) {
-  //     if (error.code !== 11000) {
-  //       throw error;
-  //     }
-
-  //     // A reward with this eventKey already exists, so do not
-  //     // award it again.
-  //   }
-
-  //   return res.json({
-  //     success: true,
-  //     completed: true,
-  //     claim: completedClaim,
-  //     message: 'Both users confirmed the handover. Reports resolved and finder awarded 10 points.',
-  //   });
-  // } catch (error) {
-  //   return next(error);
-  // }
+    return res.json({
+      success: true,
+      completed: true,
+      claim: completedClaim,
+      message: 'Both users confirmed the handover. Reports resolved and finder awarded 10 points.',
+    });
+  } catch (error) {
+    console.error('Confirm return failed:', error);
+    return next(error);
+  }
 }
