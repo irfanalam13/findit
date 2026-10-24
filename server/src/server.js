@@ -11,7 +11,7 @@ import itemRoutes from './routes/itemRoutes.js';
 import { connectDB } from './config/db.js';
 import profileRoutes from './routes/profileRoutes.js';
 import claimRoutes from './routes/claimRoutes.js';
-
+import notificationRoutes from './routes/notificationRoutes.js';
 dotenv.config();
 
 const app = express();
@@ -91,6 +91,8 @@ app.use('/api/profiles', profileRoutes);
 //claimroutes
 app.use('/api/claims', claimRoutes);
 
+//notificationroutes
+app.use('/api/notifications', notificationRoutes);
 app.use((req, res) => {
   res.status(404).json({
     success: false,

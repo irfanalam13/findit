@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 
 import Item from '../models/Item.js';
 import Claim from '../models/Claim.js';
+import { createNotification } from '../services/notificationService.js';
 
 const isValidId = (value) =>
   typeof value === 'string' &&
@@ -120,6 +121,16 @@ export async function createClaim(req, res, next) {
         foundItem: foundItem._id,
         claimant: req.user._id,
         message: message.trim(),
+      });
+
+      await createNotification({
+        recipient: foundItem.reportedBy,
+        actor: req.user._id,
+        type: 'claim_received',
+        title: 'New claim received',
+        message: 'Someone has submitted a claim for your found item.',
+        link: '/claims',
+        relatedClaim: claim._id,
       });
 
       return res.status(201).json({
@@ -267,6 +278,7 @@ export async function requestReconsideration(req, res, next) {
 
     const updatedClaim = await Claim.findOneAndUpdate(
       { _id: claim._id, status: 'rejected' },
+      
       {
         $set: {
           status: 'reconsideration_requested',
@@ -276,12 +288,25 @@ export async function requestReconsideration(req, res, next) {
       { new: true, runValidators: true },
     );
 
+
     if (!updatedClaim) {
       return res.status(409).json({
         success: false,
         message: 'This claim has already changed. Refresh and try again.',
       });
     }
+
+    await createNotification({
+      recipient: foundItem.reportedBy,
+      actor: req.user._id,
+      type: 'claim_reconsideration',
+      title: 'Claim reconsideration requested',
+      message: 'A claimant has asked you to review a rejected claim again.',
+      link: '/claims',
+      relatedClaim: updatedClaim._id,
+    });
+
+    
 
     return res.json({
       success: true,
@@ -353,7 +378,11 @@ export async function reviewClaim(req, res, next) {
     // Rejection needs only one atomic state transition.
     if (decision === 'rejected') {
       const rejected = await Claim.findOneAndUpdate(
-        { _id: claim._id, status: 'pending' },
+        
+        {
+          _id: claim._id,
+          status: { $in: ['pending', 'reconsideration_requested'] },
+        },
         {
           $set: {
             status: 'rejected',
@@ -369,6 +398,16 @@ export async function reviewClaim(req, res, next) {
           message: 'This claim has already been reviewed.',
         });
       }
+
+      await createNotification({
+        recipient: claim.claimant,
+        actor: req.user._id,
+        type: 'claim_rejected',
+        title: 'Claim update',
+        message: 'Your claim was rejected by the finder.',
+        link: '/claims',
+        relatedClaim: rejected._id,
+      });
 
       return res.json({
         success: true,
@@ -450,8 +489,20 @@ export async function reviewClaim(req, res, next) {
         ),
       ]);
 
+      await createNotification({
+        recipient: claim.claimant,
+        actor: req.user._id,
+        type: 'claim_accepted',
+        title: 'Claim accepted',
+        message: 'The finder accepted your claim. Arrange the item handover.',
+        link: '/claims',
+        relatedClaim: accepted._id,
+      });
+
       reservedLostItemId = null;
       reservedFoundItemId = null;
+
+
 
       return res.status(409).json({
         success: false,

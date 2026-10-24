@@ -1,5 +1,6 @@
 
 import { Link, useNavigate } from 'react-router-dom';
+
 import {
   Package,
   Plus,
@@ -8,8 +9,10 @@ import {
   LogIn,
   LogOut,
   House,
-  Bell,
+  ClipboardCheck,
 } from 'lucide-react';
+import NotificationBell from './NotificationBell';
+
 
 import { useAuth } from '../context/useAuth';
 
@@ -72,9 +75,10 @@ export default function Navbar({ onReportClick }) {
               </Link>
 
               <Link to="/claims" className={linkClass}>
-                <Bell size={16} />
+                <ClipboardCheck size={16} />
                 Claims
               </Link>
+              <NotificationBell />
 
               <Link to="/profile" className={linkClass}>
                 {user.avatarUrl ? (
