@@ -4,6 +4,32 @@ import Item from '../models/Item.js';
 const MAX_CANDIDATES = 200;
 const MAX_RESULTS = 20;
 const MAX_DAYS_APART = 90;
+const MIN_MATCH_SCORE = 35;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+const STOP_WORDS = new Set([
+  'a',
+  'an',
+  'and',
+  'the',
+  'of',
+  'for',
+  'with',
+  'my',
+  'is',
+  'it',
+  'this',
+  'that',
+]);
+
+const WEIGHTS = {
+  category: 20,
+  title: 20,
+  description: 20,
+  color: 10,
+  location: 15,
+  date: 15,
+};
 
 function normalize(value = '') {
   return String(value)
@@ -14,132 +40,206 @@ function normalize(value = '') {
     .trim();
 }
 
-function similarity(a, b) {
-  const left = normalize(a);
-  const right = normalize(b);
+function words(value = '') {
+  return new Set(
+    normalize(value)
+      .split(' ')
+      .filter((word) => word && !STOP_WORDS.has(word)),
+  );
+}
 
-  if (!left || !right) return 0;
-  if (left === right) return 1;
+export function textSimilarity(first = '', second = '') {
+  const left = words(first);
+  const right = words(second);
 
-  const leftWords = new Set(left.split(' '));
-  const rightWords = new Set(right.split(' '));
+  if (!left.size || !right.size) {
+    return 0;
+  }
 
-  const intersection = [...leftWords].filter(
-    (word) => rightWords.has(word),
+  const intersection = [...left].filter((word) =>
+    right.has(word),
   ).length;
 
-  const union = new Set([...leftWords, ...rightWords]).size;
+  const union = new Set([...left, ...right]).size;
 
   return union ? intersection / union : 0;
 }
 
-function dateSimilarity(dateA, dateB) {
-  const a = new Date(dateA).getTime();
-  const b = new Date(dateB).getTime();
+function dateDifferenceInDays(first, second) {
+  const firstTime = new Date(first).getTime();
+  const secondTime = new Date(second).getTime();
 
-  if (!Number.isFinite(a) || !Number.isFinite(b)) return 0;
+  if (
+    !Number.isFinite(firstTime) ||
+    !Number.isFinite(secondTime)
+  ) {
+    return null;
+  }
 
-  const days = Math.abs(a - b) / (1000 * 60 * 60 * 24);
+  return Math.abs(firstTime - secondTime) / DAY_MS;
+}
 
-  if (days > MAX_DAYS_APART) return 0;
+function dateSimilarity(first, second) {
+  const days = dateDifferenceInDays(first, second);
+
+  if (days === null || days > MAX_DAYS_APART) {
+    return 0;
+  }
 
   return Math.max(0, 1 - days / MAX_DAYS_APART);
 }
 
-function locationSimilarity(a, b) {
-  // Text similarity is only a rough proxy for geographic proximity.
-  // Replace this with validated locality/coordinates when available.
-  return similarity(a, b);
-}
-
 function scoreCandidate(source, candidate) {
-  const categoryScore = 25;
+  const titleSimilarity = textSimilarity(
+    source.title,
+    candidate.title,
+  );
 
-  const descriptionScore =
-    25 * similarity(
-      `${source.title} ${source.description}`,
-      `${candidate.title} ${candidate.description}`,
-    );
+  const descriptionSimilarity = textSimilarity(
+    source.description,
+    candidate.description,
+  );
 
-  const colorScore =
-    10 * similarity(source.color, candidate.color);
+  const colorSimilarity = textSimilarity(
+    source.color,
+    candidate.color,
+  );
 
-  const locationScore =
-    20 * locationSimilarity(source.location, candidate.location);
+  const locationSimilarity = textSimilarity(
+    source.location,
+    candidate.location,
+  );
 
-  const dateScore =
-    20 * dateSimilarity(source.dateOccurred, candidate.dateOccurred);
+  const dateScore = dateSimilarity(
+    source.dateOccurred,
+    candidate.dateOccurred,
+  );
+
+  const categoryScore =
+    source.category === candidate.category ? 1 : 0;
 
   const score = Math.round(
-    categoryScore +
-      descriptionScore +
-      colorScore +
-      locationScore +
-      dateScore,
+    categoryScore * WEIGHTS.category +
+      titleSimilarity * WEIGHTS.title +
+      descriptionSimilarity * WEIGHTS.description +
+      colorSimilarity * WEIGHTS.color +
+      locationSimilarity * WEIGHTS.location +
+      dateScore * WEIGHTS.date,
   );
+
+  const reasons = [];
+
+  if (categoryScore) {
+    reasons.push('Same category');
+  }
+
+  if (titleSimilarity >= 0.5) {
+    reasons.push('Similar item title');
+  }
+
+  if (descriptionSimilarity >= 0.25) {
+    reasons.push('Similar description');
+  }
+
+  if (colorSimilarity >= 0.5) {
+    reasons.push('Similar color');
+  }
+
+  if (locationSimilarity >= 0.5) {
+    reasons.push('Similar location text');
+  }
+
+  const days = dateDifferenceInDays(
+    source.dateOccurred,
+    candidate.dateOccurred,
+  );
+
+  if (days !== null && days <= 7) {
+    reasons.push('Reported dates are within 7 days');
+  } else if (days !== null && days <= 30) {
+    reasons.push('Reported dates are within 30 days');
+  }
 
   return {
     item: candidate,
     score,
-    reasons: [
-      'Same category',
-      ...(similarity(source.color, candidate.color) >= 0.5
-        ? ['Similar color']
-        : []),
-      ...(similarity(source.location, candidate.location) >= 0.5
-        ? ['Similar location text']
-        : []),
-      ...(dateSimilarity(
-        source.dateOccurred,
-        candidate.dateOccurred,
-      ) >= 0.5
-        ? ['Dates are relatively close']
-        : []),
-    ],
+    reasons,
   };
 }
 
+function httpError(status, message) {
+  const error = new Error(message);
+  error.status = status;
+  return error;
+}
+
 export async function findMatches(itemId, userId) {
+  if (!itemId || !userId) {
+    throw httpError(
+      400,
+      'A report ID and authenticated user are required.',
+    );
+  }
+
   const source = await Item.findById(itemId).lean();
 
   if (!source) {
-    const error = new Error('Report not found.');
-    error.status = 404;
-    throw error;
+    throw httpError(404, 'Report not found.');
   }
 
   if (
     !source.reportedBy ||
     String(source.reportedBy) !== String(userId)
   ) {
-    const error = new Error(
-      'Only the report owner can view its private match suggestions.',
+    throw httpError(
+      403,
+      'Only the report owner can view private match suggestions.',
     );
-    error.status = 403;
-    throw error;
+  }
+
+  if (!['lost', 'found'].includes(source.type)) {
+    throw httpError(400, 'The report has an invalid type.');
   }
 
   if (source.status !== 'active') {
     return [];
   }
 
-  const oppositeType = source.type === 'lost' ? 'found' : 'lost';
+  const sourceDate = new Date(source.dateOccurred);
+
+  if (!Number.isFinite(sourceDate.getTime())) {
+    throw httpError(
+      400,
+      'The report has an invalid occurrence date.',
+    );
+  }
+
+  const oppositeType =
+    source.type === 'lost' ? 'found' : 'lost';
+
+  const dateFrom = new Date(
+    sourceDate.getTime() - MAX_DAYS_APART * DAY_MS,
+  );
+
+  const dateTo = new Date(
+    sourceDate.getTime() + MAX_DAYS_APART * DAY_MS,
+  );
 
   const candidates = await Item.find({
     _id: { $ne: source._id },
     type: oppositeType,
     category: source.category,
     status: 'active',
-    reportedBy: { $ne: userId },
+
+    // Exclude the owner and legacy reports without an owner.
+    reportedBy: {
+      $exists: true,
+      $ne: source.reportedBy,
+    },
+
     dateOccurred: {
-      $gte: new Date(
-        new Date(source.dateOccurred).getTime() -
-          MAX_DAYS_APART * 86400000,
-      ),
-      $lte: new Date(
-        new Date(source.dateOccurred).getTime() +
-          MAX_DAYS_APART * 86400000,
-      ),
+      $gte: dateFrom,
+      $lte: dateTo,
     },
   })
     .sort({ createdAt: -1 })
@@ -148,7 +248,14 @@ export async function findMatches(itemId, userId) {
 
   return candidates
     .map((candidate) => scoreCandidate(source, candidate))
-    .filter((result) => result.score >= 35)
-    .sort((a, b) => b.score - a.score)
+    .filter((result) => result.score >= MIN_MATCH_SCORE)
+    .sort(
+      (first, second) =>
+        second.score - first.score ||
+        new Date(second.item.createdAt) -
+          new Date(first.item.createdAt),
+    )
     .slice(0, MAX_RESULTS);
 }
+
+export { scoreCandidate };
