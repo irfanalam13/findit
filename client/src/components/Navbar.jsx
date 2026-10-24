@@ -10,6 +10,8 @@ import {
   LogOut,
   House,
   ClipboardCheck,
+  Trophy,
+
 } from 'lucide-react';
 import NotificationBell from './NotificationBell';
 
@@ -79,6 +81,10 @@ export default function Navbar({ onReportClick }) {
                 Claims
               </Link>
               <NotificationBell />
+              <Link to="/rewards" className={linkClass}>
+                <Trophy size={16} />
+                Rewards
+              </Link>
 
               <Link to="/profile" className={linkClass}>
                 {user.avatarUrl ? (

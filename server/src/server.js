@@ -12,6 +12,8 @@ import { connectDB } from './config/db.js';
 import profileRoutes from './routes/profileRoutes.js';
 import claimRoutes from './routes/claimRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
+import rewardRoutes from './routes/rewardRoutes.js';
+
 dotenv.config();
 
 const app = express();
@@ -93,6 +95,10 @@ app.use('/api/claims', claimRoutes);
 
 //notificationroutes
 app.use('/api/notifications', notificationRoutes);
+//rewardroutes
+app.use('/api/rewards', rewardRoutes);
+
+// Catch-all route for undefined endpoints
 app.use((req, res) => {
   res.status(404).json({
     success: false,

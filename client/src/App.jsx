@@ -15,6 +15,7 @@ import ToastProvider from './components/ToastProvider';
 import { AuthProvider } from "./context/AuthContext";
 import { useAuth } from "./context/useAuth";
 import ClaimsPage from './pages/ClaimsPage';
+import RewardsPage from './pages/RewardsPage';
 
 function RequireAuth({ children }) {
   const { user, loading } = useAuth();
@@ -73,7 +74,19 @@ function AppRoutes() {
         }
       />
 
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route 
+        path="*" 
+        element={
+          <Navigate to="/" replace />} /
+      >
+      <Route
+        path="/rewards"
+        element={
+          <RequireAuth>
+            <RewardsPage />
+          </RequireAuth>
+        }
+      />
     </Routes>
   );
 }
