@@ -4,6 +4,7 @@
   "main": "index.js",
   "scripts": {
     "test": "node --test",
+    "test:smoke": "node scripts/smoke-test.js",
     "dev": "nodemon src/server.js",
     "start": "node src/server.js"
   },

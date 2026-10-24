@@ -10,12 +10,12 @@ import HomePage from './pages/HomePage';
 import ProfilePage from './pages/ProfilePage';
 import MyReportsPage from './pages/MyReportsPage';
 import AuthPage from './pages/AuthPage';
-
-import ToastProvider from './components/ToastProvider';
-import { AuthProvider } from "./context/AuthContext";
-import { useAuth } from "./context/useAuth";
 import ClaimsPage from './pages/ClaimsPage';
 import RewardsPage from './pages/RewardsPage';
+
+import ToastProvider from './components/ToastProvider';
+import { AuthProvider } from './context/AuthContext';
+import { useAuth } from './context/useAuth';
 
 function RequireAuth({ children }) {
   const { user, loading } = useAuth();
@@ -65,6 +65,7 @@ function AppRoutes() {
           </RequireAuth>
         }
       />
+
       <Route
         path="/claims"
         element={
@@ -74,11 +75,6 @@ function AppRoutes() {
         }
       />
 
-      <Route 
-        path="*" 
-        element={
-          <Navigate to="/" replace />} /
-      >
       <Route
         path="/rewards"
         element={
@@ -86,6 +82,12 @@ function AppRoutes() {
             <RewardsPage />
           </RequireAuth>
         }
+      />
+
+      {/* Keep the fallback route last. */}
+      <Route
+        path="*"
+        element={<Navigate to="/" replace />}
       />
     </Routes>
   );

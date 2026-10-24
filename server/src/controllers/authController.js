@@ -74,12 +74,12 @@ async function issueVerificationOtp(user) {
 
 
 export async function register(req, res, next) {
-    console.log('REGISTER DEBUG:', {
-        bodyKeys: Object.keys(req.body ?? {}),
-        receivedName: req.body?.name,
-        receivedEmail: req.body?.email,
-        nameType: typeof req.body?.name,
-    });
+    // console.log('REGISTER DEBUG:', {
+    //     bodyKeys: Object.keys(req.body ?? {}),
+    //     receivedName: req.body?.name,
+    //     receivedEmail: req.body?.email,
+    //     nameType: typeof req.body?.name,
+    // });
   try {
     const name =
       typeof req.body?.name === 'string'

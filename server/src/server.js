@@ -1,5 +1,6 @@
 
 
+import mongoose from 'mongoose';
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -76,9 +77,17 @@ app.use(
 );
 
 app.get('/api/health', (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: 'Findit API is running.',
+  const databaseConnected =
+    mongoose.connection.readyState === 1;
+
+  return res.status(databaseConnected ? 200 : 503).json({
+    success: databaseConnected,
+    message: databaseConnected
+      ? 'Findit API and database are ready.'
+      : 'API is running, but the database is not connected.',
+    database: databaseConnected
+      ? 'connected'
+      : 'disconnected',
   });
 });
 
