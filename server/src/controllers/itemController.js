@@ -1,6 +1,9 @@
 
 import Item from '../models/Item.js';
 
+const publicReporterFields =
+  'name username avatarUrl isEmailVerified';
+
 export async function getItems(req, res, next) {
   try {
     const { type, category, search } = req.query;
@@ -16,7 +19,7 @@ export async function getItems(req, res, next) {
     }
 
     if (search?.trim()) {
-      // Escape regex special characters in the user's search query.
+      // Escape regular-expression characters in the search query.
       const escaped = search
         .trim()
         .replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -30,6 +33,7 @@ export async function getItems(req, res, next) {
     }
 
     const items = await Item.find(filter)
+      .populate('reportedBy', publicReporterFields)
       .sort({ createdAt: -1 })
       .limit(100)
       .lean();
@@ -46,8 +50,7 @@ export async function getItems(req, res, next) {
 
 export async function createItem(req, res, next) {
   try {
-    // req.user is populated by requireAuth middleware.
-    // Never take the report owner's ID from req.body.
+    // The authenticated user must own the new report.
     if (!req.user?._id) {
       return res.status(401).json({
         success: false,
@@ -67,9 +70,12 @@ export async function createItem(req, res, next) {
     } = req.body;
 
     if (
-      !title?.trim() ||
-      !description?.trim() ||
-      !location?.trim() ||
+      typeof title !== 'string' ||
+      !title.trim() ||
+      typeof description !== 'string' ||
+      !description.trim() ||
+      typeof location !== 'string' ||
+      !location.trim() ||
       !dateOccurred
     ) {
       return res.status(400).json({
@@ -95,9 +101,11 @@ export async function createItem(req, res, next) {
       dateOccurred,
       imageUrl,
 
-      // The key line: link this report to the logged-in user.
+      // Never accept the report owner's ID from the request body.
       reportedBy: req.user._id,
     });
+
+    await item.populate('reportedBy', publicReporterFields);
 
     return res.status(201).json({
       success: true,
