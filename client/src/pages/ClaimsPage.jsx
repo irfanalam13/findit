@@ -499,13 +499,18 @@ export default function ClaimsPage() {
   }, []);
 
   useEffect(() => {
-    void loadClaims(true);
+    const initialLoadId = window.setTimeout(() => {
+      void loadClaims();
+    }, 0);
 
     const intervalId = window.setInterval(() => {
       void loadClaims(true);
     }, 15000);
 
-    return () => window.clearInterval(intervalId);
+    return () => {
+      window.clearTimeout(initialLoadId);
+      window.clearInterval(intervalId);
+    };
   }, [loadClaims]);
 
   async function handleReview(claimId, decision) {

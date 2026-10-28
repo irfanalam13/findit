@@ -91,7 +91,11 @@ export default function RewardsPage() {
   }, []);
 
   useEffect(() => {
-    void loadRewards(true);
+    const timeoutId = window.setTimeout(() => {
+      void loadRewards();
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, [loadRewards]);
 
   return (

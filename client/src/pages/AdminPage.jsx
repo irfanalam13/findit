@@ -125,7 +125,11 @@ export default function AdminPage() {
   }, []);
 
   useEffect(() => {
-    void loadDashboard(false);
+    const timeoutId = window.setTimeout(() => {
+      void loadDashboard();
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, [loadDashboard]);
 
   const filteredUsers = useMemo(() => {
