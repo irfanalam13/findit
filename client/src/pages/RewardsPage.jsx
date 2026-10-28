@@ -91,7 +91,7 @@ export default function RewardsPage() {
   }, []);
 
   useEffect(() => {
-    void loadRewards();
+    void loadRewards(true);
   }, [loadRewards]);
 
   return (

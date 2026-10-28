@@ -125,7 +125,7 @@ export default function AdminPage() {
   }, []);
 
   useEffect(() => {
-    void loadDashboard();
+    void loadDashboard(false);
   }, [loadDashboard]);
 
   const filteredUsers = useMemo(() => {

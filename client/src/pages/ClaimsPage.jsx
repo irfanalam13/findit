@@ -499,7 +499,7 @@ export default function ClaimsPage() {
   }, []);
 
   useEffect(() => {
-    void loadClaims();
+    void loadClaims(true);
 
     const intervalId = window.setInterval(() => {
       void loadClaims(true);
