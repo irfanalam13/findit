@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import {
   BrowserRouter,
   Navigate,
@@ -43,19 +44,56 @@ function RequireAuth({ children }) {
   return children;
 }
 
+
 function RequireAdmin({ children }) {
-  const { user, loading } = useAuth();
+  const { refreshUser } = useAuth();
   const location = useLocation();
 
-  if (loading) {
+  const [checkingAdmin, setCheckingAdmin] = useState(true);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [checkFailed, setCheckFailed] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function verifyAdminAccess() {
+      try {
+        // Fetch the current user from the backend instead of
+        // trusting a potentially stale React context value.
+        const freshUser = await refreshUser();
+
+        if (!cancelled) {
+          setCurrentUser(freshUser);
+          setCheckFailed(!freshUser);
+        }
+      } catch {
+        if (!cancelled) {
+          setCurrentUser(null);
+          setCheckFailed(true);
+        }
+      } finally {
+        if (!cancelled) {
+          setCheckingAdmin(false);
+        }
+      }
+    }
+
+    void verifyAdminAccess();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshUser]);
+
+  if (checkingAdmin) {
     return (
       <div className="p-8 text-center text-slate-600">
-        Checking administrator access...
+        Verifying administrator access...
       </div>
     );
   }
 
-  if (!user?.isEmailVerified) {
+  if (checkFailed || !currentUser) {
     return (
       <Navigate
         to="/login"
@@ -65,12 +103,39 @@ function RequireAdmin({ children }) {
     );
   }
 
-  if (user.role !== 'admin') {
-    return <Navigate to="/" replace />;
+  if (!currentUser.isEmailVerified) {
+    return (
+      <Navigate
+        to="/login"
+        state={{ from: location }}
+        replace
+      />
+    );
+  }
+
+  if (currentUser.role !== 'admin') {
+    return (
+      <div className="p-8 text-center">
+        <h1 className="text-xl font-bold text-slate-900">
+          Administrator access required
+        </h1>
+        <p className="mt-2 text-slate-600">
+          Your current account does not have administrator privileges.
+        </p>
+        <button
+          type="button"
+          onClick={() => window.location.assign('/')}
+          className="mt-4 rounded-lg bg-indigo-600 px-4 py-2 text-white"
+        >
+          Return home
+        </button>
+      </div>
+    );
   }
 
   return children;
 }
+
 
 function AppRoutes() {
   return (
