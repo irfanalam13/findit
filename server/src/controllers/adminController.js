@@ -69,6 +69,45 @@ export async function getAdminOverview(req, res, next) {
         },
       ]),
     ]);
+
+    const claimsByStatus = Object.fromEntries(
+      claimGroups.map(({ _id, count }) => [_id, count]),
+    );
+
+    const rewardSummary = rewardGroups[0] || {
+      pointsIssued: 0,
+      rewardEvents: 0,
+    };
+
+    return res.json({
+      success: true,
+      overview: {
+        users: {
+          total: totalUsers,
+          verified: verifiedUsers,
+          suspended: suspendedUsers,
+        },
+        reports: {
+          total: totalReports,
+          active: activeReports,
+          hidden: hiddenReports,
+          lost: lostReports,
+          found: foundReports,
+          resolved: resolvedReports,
+        },
+        claims: {
+          total: Object.values(claimsByStatus).reduce(
+            (sum, count) => sum + count,
+            0,
+          ),
+          byStatus: claimsByStatus,
+        },
+        rewards: {
+          pointsIssued: rewardSummary.pointsIssued,
+          events: rewardSummary.rewardEvents,
+        },
+      },
+    });
   } catch (error) {
     return next(error);
   }
